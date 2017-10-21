@@ -529,7 +529,9 @@ namespace MapImage
         private void button2_Click(object sender, EventArgs e)
         {
             //shp.Shpfile shpfile = new shp.Shpfile(@"C:\FastSource\AnalyzeShp\Data\SampleShp\japan_ver81.shp");
-            shp.Shpfile shpfile = new shp.Shpfile(@"C:\Users\Kirin\Downloads\planet_139.441,35.572_139.998,35.853-shp\shape\buildings.shp");
+            //shp.Shpfile shpfile = new shp.Shpfile(@"C:\Users\Kirin\Downloads\planet_139.441,35.572_139.998,35.853-shp\shape\buildings.shp");
+            shp.Shpfile shpfile = new shp.Shpfile(@"D:\Source\MapImage\Data\SampleShp\japan_ver81.shp");
+
             
 
             for (int i = 0; i < shpfile.Contents.listContents.Count(); i++)

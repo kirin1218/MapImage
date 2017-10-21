@@ -356,9 +356,9 @@ namespace MapImage
                 )
                 {
                     if (IsInArea(ptData) != false
-                     && IsInSidePoint(ptData[0], ptData[1]) != false
-                     && IsInSidePoint(ptData[2], ptData[3]) != false
-                     && IsInSidePoint(ptData[4], ptData[5]) != false
+                     //&& IsInSidePoint(ptData[0], ptData[1]) != false
+                     //&& IsInSidePoint(ptData[2], ptData[3]) != false
+                     //&& IsInSidePoint(ptData[4], ptData[5]) != false
                     )
                     {
                         int i1, i2, i3;
@@ -414,24 +414,115 @@ namespace MapImage
             }
 
             return bInside;
-        }
+        } 
 
-        private bool IsInArea(Vec6f ptData)
+        private Boolean IsInArea( float x, float y)
         {
-            //なんか大変そうなので重心にあるかだけみる
-            int x = (int)((ptData[0] + ptData[2] + ptData[4]) / 3);
-            int y = (int)((ptData[1] + ptData[3] + ptData[5]) / 3);
+            double temp = 0;
+            double angle = 0;
 
-            Vec3b px = this.image.Get<Vec3b>(y, x);
+            for (int i = 0; i < this.keypoints.Count()-1; i++)
+            {
+                Point2f pt1;
+                Point2f pt2;
 
-            if (px != new Vec3b(0xFF, 0xFF, 0xFF))
+                pt1 = this.keypoints[i];
+                if (i + 1 >= this.keypoints.Count())
+                {
+                    pt2 = this.keypoints[0];
+                }
+                else
+                {
+                    pt2 = this.keypoints[i + 1];
+                }
+#if false
+                double Ax, Ay, Bx, By;
+                double AxB, AvB;
+
+                Ax = pt1.X - x;
+                Ay = pt1.Y - y;
+                Bx = pt2.X - x;
+                By = pt2.Y - y;
+                AvB = Ax * Bx + Ay + By;
+                AxB = Ax * By - Ay + Bx;
+
+                angle += Math.Atan2(AxB, AvB);
+#else
+                //  |a||b|cosθ= x1*x2 + y1*y2
+                //  θ = arccos( x1*x2 + y1*y2 / |a||b|) 
+                double mole;
+                double deno;
+                Vec2d v1;
+                Vec2d v2;
+                double scal1, scal2;
+
+                mole = pt1.X * pt2.X + pt1.Y * pt2.Y;
+                v1.Item0 = pt1.X - x;
+                v1.Item1 = pt1.Y - y;
+                v2.Item0 = pt2.X - x;
+                v2.Item1 = pt2.Y - y;
+                scal1 = Math.Sqrt(v1.Item0 * v1.Item0 + v1.Item1 * v1.Item1);
+                scal2 = Math.Sqrt(v2.Item0 * v2.Item0 + v2.Item1 * v2.Item1);
+
+                angle += Math.Acos(mole / (scal1 * scal2));
+#endif
+            }
+
+            double temp1 = Math.Abs(angle);
+            double temp2 = 2 * Math.PI;
+
+            if ( Math.Abs(2 * Math.PI - Math.Abs(angle) ) < 0.001)
             {
                 return true;
+
             }
             else
             {
                 return false;
             }
+        }
+
+        private bool IsInArea(Vec6f ptData)
+        {
+            //なんか大変そうなので重心にあるかだけみる
+            float x = (float)((ptData[0] + ptData[2] + ptData[4]) / 3);
+            float y = (float)((ptData[1] + ptData[3] + ptData[5]) / 3);
+
+
+            return IsInArea(x, y);
+
+            //double dAreaSize = 0;
+
+            //for( int i = 0; i <  this.keypoints.Count(); i++)
+            //{
+            //    Point2f pt1;
+            //    Point2f pt2;
+
+            //    pt1 = this.keypoints[i];
+            //    if( i + 1 >= this.keypoints.Count())
+            //    {
+            //        pt2 = this.keypoints[0];
+            //    }
+            //    else
+            //    {
+            //        pt2 = this.keypoints[i+1];
+            //    }
+
+            //    dAreaSize += Math.Abs((pt1.X - pt2.X) * (pt1.Y + pt2.Y));
+            //}
+
+            //dAreaSize /= 2;
+
+            //Vec3b px = this.image.Get<Vec3b>(y, x);
+
+            //if (px != new Vec3b(0xFF, 0xFF, 0xFF))
+            //{
+            //    return true;
+            //}
+            //else
+            //{
+            //    return false;
+            //}
         }
 
         public KeyPoint[] toKeyPoints()
