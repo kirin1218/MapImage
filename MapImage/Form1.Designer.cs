@@ -42,7 +42,9 @@
             this.h_label = new System.Windows.Forms.Label();
             this.KeyPointslistView = new System.Windows.Forms.ListView();
             this.button1 = new System.Windows.Forms.Button();
+            this.buildings = new System.Windows.Forms.Button();
             this.button2 = new System.Windows.Forms.Button();
+            this.button3 = new System.Windows.Forms.Button();
             ((System.ComponentModel.ISupportInitialize)(this.pictureBox)).BeginInit();
             ((System.ComponentModel.ISupportInitialize)(this.subView)).BeginInit();
             this.SuspendLayout();
@@ -162,30 +164,52 @@
             // 
             // button1
             // 
-            this.button1.Location = new System.Drawing.Point(244, 509);
+            this.button1.Location = new System.Drawing.Point(329, 509);
             this.button1.Name = "button1";
             this.button1.Size = new System.Drawing.Size(75, 23);
             this.button1.TabIndex = 9;
-            this.button1.Text = "button1";
+            this.button1.Text = "json出力";
             this.button1.UseVisualStyleBackColor = true;
             this.button1.Click += new System.EventHandler(this.button1_Click);
             // 
+            // buildings
+            // 
+            this.buildings.Location = new System.Drawing.Point(329, 473);
+            this.buildings.Name = "buildings";
+            this.buildings.Size = new System.Drawing.Size(75, 23);
+            this.buildings.TabIndex = 10;
+            this.buildings.Text = "buildings";
+            this.buildings.UseVisualStyleBackColor = true;
+            this.buildings.Click += new System.EventHandler(this.button2_Click);
+            // 
             // button2
             // 
-            this.button2.Location = new System.Drawing.Point(325, 509);
+            this.button2.Location = new System.Drawing.Point(410, 473);
             this.button2.Name = "button2";
             this.button2.Size = new System.Drawing.Size(75, 23);
-            this.button2.TabIndex = 10;
-            this.button2.Text = "button2";
+            this.button2.TabIndex = 11;
+            this.button2.Text = "roads";
             this.button2.UseVisualStyleBackColor = true;
-            this.button2.Click += new System.EventHandler(this.button2_Click);
+            this.button2.Click += new System.EventHandler(this.button2_Click_1);
+            // 
+            // button3
+            // 
+            this.button3.Location = new System.Drawing.Point(410, 509);
+            this.button3.Name = "button3";
+            this.button3.Size = new System.Drawing.Size(75, 23);
+            this.button3.TabIndex = 12;
+            this.button3.Text = "json出力2";
+            this.button3.UseVisualStyleBackColor = true;
+            this.button3.Click += new System.EventHandler(this.button3_Click);
             // 
             // Form1
             // 
             this.AutoScaleDimensions = new System.Drawing.SizeF(6F, 12F);
             this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font;
             this.ClientSize = new System.Drawing.Size(1122, 573);
+            this.Controls.Add(this.button3);
             this.Controls.Add(this.button2);
+            this.Controls.Add(this.buildings);
             this.Controls.Add(this.button1);
             this.Controls.Add(this.KeyPointslistView);
             this.Controls.Add(this.h_label);
@@ -225,7 +249,9 @@
         private System.Windows.Forms.Label h_label;
         private System.Windows.Forms.ListView KeyPointslistView;
         private System.Windows.Forms.Button button1;
+        private System.Windows.Forms.Button buildings;
         private System.Windows.Forms.Button button2;
+        private System.Windows.Forms.Button button3;
     }
 }
 

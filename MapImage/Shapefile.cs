@@ -92,7 +92,8 @@ namespace MapImage
         {
             private string _path;
             private Header _header;
-            private Contents<Polygon> _contents;
+            private Contents<Polygon> _contentsPolygon;
+            private Contents<Polyline> _contentsPolyline;
 
             public Header Header{
                 get{
@@ -102,7 +103,12 @@ namespace MapImage
 
             public Contents<Polygon> Contents
             {
-                get { return _contents;  }
+                get { return _contentsPolygon;  }
+            }
+
+            public Contents<Polyline> ContentPolyline
+            {
+                get { return _contentsPolyline; }
             }
 
             public Shpfile(string path)
@@ -118,10 +124,22 @@ namespace MapImage
 
                 _header = shp.Header.Analyze(header, 100);
 
-                _contents = new Contents<shp.Polygon>();
+                if (_header.ShapeType == (int)shp.shptype.POLYGON)
+                {
+                    _contentsPolygon = new Contents<shp.Polygon>();
 
-                _contents.nType = _header.ShapeType;
-                _contents.listContents = new List<Polygon>();
+                    _contentsPolygon.nType = _header.ShapeType;
+                    _contentsPolygon.listContents = new List<Polygon>();
+
+                }
+                else if (_header.ShapeType == (int)shp.shptype.POLYLINE)
+                {
+                    _contentsPolyline = new Contents<shp.Polyline>();
+
+                    _contentsPolyline.nType = _header.ShapeType;
+                    _contentsPolyline.listContents = new List<Polyline>();
+                    
+                }
 
                 int nCurSize = 100;
 
@@ -144,9 +162,12 @@ namespace MapImage
 
                     if ( _header.ShapeType == (int)shp.shptype.POLYGON)
                     {
-                        _contents.listContents.Add(shp.Polygon.Analyze(data, nLength));
+                        _contentsPolygon.listContents.Add(shp.Polygon.Analyze(data, nLength));
+                    }else if (_header.ShapeType == (int)shp.shptype.POLYLINE)
+                    {
+                        _contentsPolyline.listContents.Add(shp.Polyline.Analyze(data, nLength));
                     }
-
+                        
                     nCurSize += nLength;
                 }
 
@@ -347,6 +368,92 @@ namespace MapImage
                 }
 
                 return pPolygon;
+            }
+        };
+
+        public class Polyline
+        {
+            Polyline() { }
+
+            private int _type;
+            private double[] _Box;
+            private int _nNumParts;
+            private int _nNumPoints;
+            private List<int> _listParts;
+            private List<Point> _listPoints;
+
+            public int nType
+            {
+                get { return _type; }
+                set { _type = value; }
+            }
+            public double[] Box
+            {
+                get { return _Box; }
+                set { _Box = value; }
+            }
+
+            public int nNumParts
+            {
+                get { return _nNumParts; }
+                set { _nNumParts = value; }
+            }
+
+            public int nNumPoints
+            {
+                get { return _nNumPoints; }
+                set { _nNumPoints = value; }
+            }
+
+            public List<int> listParts
+            {
+                get { return _listParts; }
+                set { _listParts = value; }
+            }
+
+            public List<Point> listPoints
+            {
+                get { return _listPoints; }
+                set { _listPoints = value; }
+            }
+
+            static public Polyline Analyze(byte[] pData, int nSize)
+            {
+                int i = 0;
+
+                Polyline pPolyline = new Polyline();
+#if true
+                pPolyline.nType = common.ReadInt(pData, i, false); i += 4;
+                pPolyline.Box = new double[4];
+                pPolyline.Box[0] = common.ReadDouble(pData, i, false); i += 8;
+                pPolyline.Box[1] = common.ReadDouble(pData, i, false); i += 8;
+                pPolyline.Box[2] = common.ReadDouble(pData, i, false); i += 8;
+                pPolyline.Box[3] = common.ReadDouble(pData, i, false); i += 8;
+                pPolyline.nNumParts = common.ReadInt(pData, i, false); i += 4;
+                pPolyline.nNumPoints = common.ReadInt(pData, i, false); i += 4;
+
+                pPolyline.listParts = new List<int>();
+                int j;
+                for (j = 0; j < pPolyline.nNumParts; j++)
+                {
+                    int nPart = common.ReadInt(pData, i, false); i += 4;
+                    pPolyline.listParts.Add(nPart);
+                }
+
+                pPolyline.listPoints = new List<Point>();
+                for (j = 0; j < pPolyline.nNumPoints; j++)
+                {
+                    double x;
+                    double y;
+
+                    x = common.ReadDouble(pData, i, false); i += 8;
+                    y = common.ReadDouble(pData, i, false); i += 8;
+
+                    Point pt = new Point(x, y);
+                    pPolyline.listPoints.Add(pt);
+                }
+#endif
+                return pPolyline;
             }
         };
     }

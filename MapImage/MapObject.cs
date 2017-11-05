@@ -7,6 +7,8 @@ using OpenCvSharp;
 using System.Runtime.Serialization;
 
 using System.Diagnostics;
+using System.Device;
+using System.Device.Location;
 
 namespace MapImage
 {
@@ -78,6 +80,15 @@ namespace MapImage
         //  ポリゴンを構成する頂点のリスト
         [DataMemberAttribute]
         private List<Polygon3> p;
+        [DataMemberAttribute]
+        public float startPosX;
+        [DataMemberAttribute]
+        public float startPosY;
+        [DataMemberAttribute]
+        public float endPosX;
+        [DataMemberAttribute]
+        public float endPosY;
+
 
         public List<Vertex3> getVertex3 { get { return v; } }
         public int AddVertex3(Vertex3 item)
@@ -160,9 +171,10 @@ namespace MapImage
 
         private Mat image;
         private Point2f relPt;
-        private int width;
-        private int height;
+        private double width;
+        private double height;
         public List<Point2f> keypoints;
+        public List<Point2f> dist_points;
         public List<Side> sides;
         public BuildInfo build;
 
@@ -176,39 +188,85 @@ namespace MapImage
             height = 0;
 
             keypoints = new List<Point2f>();
+            dist_points = new List<Point2f>();
             sides = new List<Side>();
             build = new BuildInfo();
         }
 
         public void CalcSize()
         {
-            int minX = 10000, maxX = 0;
-            int minY = 10000, maxY = 0;
+            double minX = 10000, maxX = 0;
+            double minY = 10000, maxY = 0;
+            double TokyoX = 139.767052; 
+            double TokyoY = 35.681167;
 
-            for( int i = 0; i< keypoints.Count(); i++)
+            var x = new GeoCoordinate(0, BoxMin.X).GetDistanceTo(new GeoCoordinate(0, TokyoX));
+            var y = new GeoCoordinate(BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(TokyoY, 0));
+
+            if(TokyoX < BoxMin.X)
             {
-                if( minX > keypoints[i].X)
+                relPt.X = (float)x;
+            }
+            else
+            {
+                relPt.X = (float)-x;
+            }
+            if (TokyoY < BoxMin.Y)
+            {
+                relPt.Y = (float)y;
+            }
+            else
+            {
+                relPt.Y = (float)-y;
+            }
+            build.startPosX = relPt.X;
+            build.startPosY = relPt.Y;
+
+            x = new GeoCoordinate(0, BoxMax.X).GetDistanceTo(new GeoCoordinate(0, TokyoX));
+            y = new GeoCoordinate(BoxMax.Y, 0).GetDistanceTo(new GeoCoordinate(TokyoY, 0));
+
+            if (TokyoX < BoxMax.X)
+            {
+                build.endPosX = (float)x;
+            }
+            else
+            {
+                build.endPosX = (float)-x;
+            }
+            if (TokyoY < BoxMax.Y)
+            {
+                build.endPosY = (float)y;
+            }
+            else
+            {
+                build.endPosY = (float)-y;
+            }
+
+
+            for ( int i = 0; i< dist_points.Count(); i++)
+            {
+                if( minX > dist_points[i].X)
                 {
-                    minX = (int)keypoints[i].X;
+                    minX = dist_points[i].X;
                 }
-                if (maxX < keypoints[i].X)
+                if (maxX < dist_points[i].X)
                 {
-                    maxX = (int)keypoints[i].X;
+                    maxX = dist_points[i].X;
                 }
-                if (minY > keypoints[i].Y)
+                if (minY > dist_points[i].Y)
                 {
-                    minY = (int)keypoints[i].Y;
+                    minY = dist_points[i].Y;
                 }
-                if (maxY < keypoints[i].Y)
+                if (maxY < dist_points[i].Y)
                 {
-                    maxY = (int)keypoints[i].Y;
+                    maxY = dist_points[i].Y;
                 }
             }
 
             if(minX < maxX && minY < maxY)
             {
-                relPt.X = minX;
-                relPt.Y = minY;
+                //relPt.X = (float)minX;
+                //relPt.Y = (float)minY;
                 width = maxX;
                 height = maxY;
             }
@@ -227,11 +285,16 @@ namespace MapImage
             keypoints.Add(new Point2f( (float)x, (float)y ) );
         }
 
-        public void MakePolygon()
-        {
-            GetSides();
 
-            AddHeight();
+
+        public void Long2Dist()
+        {
+            for (int i = 0; i < keypoints.Count(); i++ ){
+                double x = new GeoCoordinate(0, BoxMin.X).GetDistanceTo(new GeoCoordinate(0, keypoints[i].X));
+                double y = new GeoCoordinate(BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate( keypoints[i].Y, 0));
+
+                dist_points.Add(new Point2f((float)x, (float)y));
+            }
         }
 
         public MapObject(Mat obj, float startX, float startY)
@@ -243,287 +306,12 @@ namespace MapImage
             width = image.Width;
             height = image.Height;
 
-            keypoints = new List<Point2f>();
-            sides = new List<Side>();
+
             build = new BuildInfo();
 
-            GetKeyPoint();
-            GetSides();
-            //  一度オブジェクトの内側の線を削除する
-            DeleteInsideLine();
-            //  頂点の順番をそろえつつ、頂点リストを作成
-            SortItems();
-            //  省けそうな頂点を削除する
-            DeleteExtraPoint();
-            //  余分な頂点を削除した状態で再度、辺情報を作成する
-            GetSides();
-            AddHeight();
-        }
-
-        private int GetKeyPoint()
-        {
-
-            //------AGAST-------------
-            OpenCvSharp.AgastFeatureDetector agast = OpenCvSharp.AgastFeatureDetector.Create();
-            OpenCvSharp.KeyPoint[] points;
-
-            points = agast.Detect(this.image);
-
-            for (int i = 0; i < points.Count(); i++)
-            {
-                keypoints.Add(new Point2f(points[i].Pt.X, points[i].Pt.Y));
-            }
-
-            agast.Dispose();
-
-            return keypoints.Count();
         }
 
 
-        private void AddHeight()
-        {
-            float dummyheight = 100;
-
-            int nPoly = this.build.CountPolygon3();
-            for (int l = 0; l < nPoly; l++)
-            {
-                int i1 = this.build.getPolygon3[l].i1;
-                int i2 = this.build.getPolygon3[l].i2;
-                int i3 = this.build.getPolygon3[l].i3;
-
-                int i4, i5, i6;
-
-                i4 = build.AddVertex3(new Vertex3(this.build.getVertex3[i1].x, dummyheight, this.build.getVertex3[i1].z));
-                i5 = build.AddVertex3(new Vertex3(this.build.getVertex3[i2].x, dummyheight, this.build.getVertex3[i2].z));
-                i6 = build.AddVertex3(new Vertex3(this.build.getVertex3[i3].x, dummyheight, this.build.getVertex3[i3].z));
-                build.AddPolygon3(new Polygon3(i6, i5, i4));
-            }
-
-            for (int i = 0; i < this.Count(); i++)
-            {
-                if (this.sides[i].Count() == 1)
-                {
-                    int i1, i2, i3;
-                    Point2f Item0;
-                    Point2f Item1;
-
-                    Item0 = this.sides[i].Item0;
-                    Item1 = this.sides[i].Item1;
-
-                    i1 = build.AddVertex3(new Vertex3(Item0.X + relPt.X, 0, -(Item0.Y + relPt.Y)));
-                    i2 = build.AddVertex3(new Vertex3(Item0.X + relPt.X, dummyheight, -(Item0.Y + relPt.Y)));
-                    i3 = build.AddVertex3(new Vertex3(Item1.X + relPt.X, 0, -(Item1.Y + relPt.Y)));
-                    build.AddPolygon3(new Polygon3(i3, i2, i1));
-
-                    i1 = build.AddVertex3(new Vertex3(Item0.X + relPt.X, dummyheight, -(Item0.Y + relPt.Y)));
-                    i2 = build.AddVertex3(new Vertex3(Item1.X + relPt.X, dummyheight, -(Item1.Y + relPt.Y)));
-                    i3 = build.AddVertex3(new Vertex3(Item1.X + relPt.X, 0, -(Item1.Y + relPt.Y)));
-                    build.AddPolygon3(new Polygon3(i3, i2, i1));
-                }
-            }
-
-
-        }
-
-        private int GetSides()
-        {
-            build.Release();
-
-            Subdiv2D subdiv = new Subdiv2D();
-
-            subdiv.InitDelaunay(new Rect(0, 0, this.width+1, this.height+1));
-            subdiv.Insert(this.keypoints);
-
-            // ドロネー三角形のリストを取得
-            Vec6f[] triangles;
-            triangles = subdiv.GetTriangleList();
-
-            //  辺を洗い出す
-            this.sides.Clear();
-
-            for (int l = 0; l < triangles.Count(); l++)
-            {
-
-                //(10, 20)-(100, 200)に、幅1の黒い線を引く
-                Vec6f ptData = triangles[l];
-
-                if ((0 <= ptData[0] && ptData[0] < (float)this.width)
-                    && (0 <= ptData[1] && ptData[1] < (float)this.height)
-                    && (0 <= ptData[2] && ptData[2] < (float)this.width)
-                    && (0 <= ptData[3] && ptData[3] < (float)this.height)
-                    && (0 <= ptData[4] && ptData[4] < (float)this.width)
-                    && (0 <= ptData[5] && ptData[5] < (float)this.height)
-                )
-                {
-                    if (IsInArea(ptData) != false
-                     //&& IsInSidePoint(ptData[0], ptData[1]) != false
-                     //&& IsInSidePoint(ptData[2], ptData[3]) != false
-                     //&& IsInSidePoint(ptData[4], ptData[5]) != false
-                    )
-                    {
-                        int i1, i2, i3;
-
-                        AddSide(ptData[0], ptData[1], ptData[2], ptData[3]);
-                        AddSide(ptData[2], ptData[3], ptData[4], ptData[5]);
-                        AddSide(ptData[4], ptData[5], ptData[0], ptData[1]);
-
-                        //  底辺として記憶する
-                        i1 = build.AddVertex3(new Vertex3(ptData[0] + relPt.X, 0, -(ptData[1] + relPt.Y)));
-                        i2 = build.AddVertex3(new Vertex3(ptData[2] + relPt.X, 0, -(ptData[3] + relPt.Y)));
-                        i3 = build.AddVertex3(new Vertex3(ptData[4] + relPt.X, 0, -(ptData[5] + relPt.Y)));
-                        build.AddPolygon3(new Polygon3(i3, i2, i1));
-
-                        ////  天井として記憶する  
-                        //i1 = build.AddVertex3(new Vertex3(ptData[0] + relPt.X, ptData[1] + relPt.Y, dummyheight));
-                        //i2 = build.AddVertex3(new Vertex3(ptData[2] + relPt.X, ptData[3] + relPt.Y, dummyheight));
-                        //i3 = build.AddVertex3(new Vertex3(ptData[4] + relPt.X, ptData[5] + relPt.Y, dummyheight));
-                        //build.AddPolygon3(new Polygon3(i1, i2, i3));
-                    }
-                }
-            }
-
-            subdiv.Dispose();
-
-
-            return this.sides.Count();
-
-        }
-
-        private bool IsInSidePoint(float x, float y)
-        {
-            bool bInside = false;
-
-            for (int i = 0; i < this.keypoints.Count(); i++)
-            {
-                if (this.keypoints[i].X == (int)x && this.keypoints[i].Y == (int)y)
-                {
-                    return true;
-                }
-            }
-
-            if (x < 0 || y < 0 || x >= this.width || y >= this.height)
-            {
-                return false;
-            }
-
-            Vec3b px = this.image.Get<Vec3b>((int)y, (int)x);
-
-            if (px != new Vec3b(0xFF, 0xFF, 0xFF))
-            {
-                bInside = true;
-            }
-
-            return bInside;
-        } 
-
-        private Boolean IsInArea( float x, float y)
-        {
-            double temp = 0;
-            double angle = 0;
-
-            for (int i = 0; i < this.keypoints.Count()-1; i++)
-            {
-                Point2f pt1;
-                Point2f pt2;
-
-                pt1 = this.keypoints[i];
-                if (i + 1 >= this.keypoints.Count())
-                {
-                    pt2 = this.keypoints[0];
-                }
-                else
-                {
-                    pt2 = this.keypoints[i + 1];
-                }
-#if false
-                double Ax, Ay, Bx, By;
-                double AxB, AvB;
-
-                Ax = pt1.X - x;
-                Ay = pt1.Y - y;
-                Bx = pt2.X - x;
-                By = pt2.Y - y;
-                AvB = Ax * Bx + Ay + By;
-                AxB = Ax * By - Ay + Bx;
-
-                angle += Math.Atan2(AxB, AvB);
-#else
-                //  |a||b|cosθ= x1*x2 + y1*y2
-                //  θ = arccos( x1*x2 + y1*y2 / |a||b|) 
-                double mole;
-                double deno;
-                Vec2d v1;
-                Vec2d v2;
-                double scal1, scal2;
-
-                mole = pt1.X * pt2.X + pt1.Y * pt2.Y;
-                v1.Item0 = pt1.X - x;
-                v1.Item1 = pt1.Y - y;
-                v2.Item0 = pt2.X - x;
-                v2.Item1 = pt2.Y - y;
-                scal1 = Math.Sqrt(v1.Item0 * v1.Item0 + v1.Item1 * v1.Item1);
-                scal2 = Math.Sqrt(v2.Item0 * v2.Item0 + v2.Item1 * v2.Item1);
-
-                angle += Math.Acos(mole / (scal1 * scal2));
-#endif
-            }
-
-            double temp1 = Math.Abs(angle);
-            double temp2 = 2 * Math.PI;
-
-            if ( Math.Abs(2 * Math.PI - Math.Abs(angle) ) < 0.001)
-            {
-                return true;
-
-            }
-            else
-            {
-                return false;
-            }
-        }
-
-        private bool IsInArea(Vec6f ptData)
-        {
-            //なんか大変そうなので重心にあるかだけみる
-            float x = (float)((ptData[0] + ptData[2] + ptData[4]) / 3);
-            float y = (float)((ptData[1] + ptData[3] + ptData[5]) / 3);
-
-
-            return IsInArea(x, y);
-
-            //double dAreaSize = 0;
-
-            //for( int i = 0; i <  this.keypoints.Count(); i++)
-            //{
-            //    Point2f pt1;
-            //    Point2f pt2;
-
-            //    pt1 = this.keypoints[i];
-            //    if( i + 1 >= this.keypoints.Count())
-            //    {
-            //        pt2 = this.keypoints[0];
-            //    }
-            //    else
-            //    {
-            //        pt2 = this.keypoints[i+1];
-            //    }
-
-            //    dAreaSize += Math.Abs((pt1.X - pt2.X) * (pt1.Y + pt2.Y));
-            //}
-
-            //dAreaSize /= 2;
-
-            //Vec3b px = this.image.Get<Vec3b>(y, x);
-
-            //if (px != new Vec3b(0xFF, 0xFF, 0xFF))
-            //{
-            //    return true;
-            //}
-            //else
-            //{
-            //    return false;
-            //}
-        }
 
         public KeyPoint[] toKeyPoints()
         {
@@ -795,12 +583,12 @@ namespace MapImage
             //set { _objMat = value; }
         }
 
-        public int Width
+        public double Width
         {
             get { return width; }
         }
 
-        public int Height
+        public double Height
         {
             get { return height; }
         }
@@ -809,11 +597,258 @@ namespace MapImage
     //  お家用
     public class House : MapObject
     {
+
         public House(Mat obj, float startX, float startY) : base(obj, startX, startY)
         {
+            keypoints = new List<Point2f>();
+            sides = new List<Side>();
+
+            GetKeyPoint();
+            GetSides();
+            //  一度オブジェクトの内側の線を削除する
+            DeleteInsideLine();
+            //  頂点の順番をそろえつつ、頂点リストを作成
+            SortItems();
+            //  省けそうな頂点を削除する
+            DeleteExtraPoint();
+            //  余分な頂点を削除した状態で再度、辺情報を作成する
+            GetSides();
+            AddHeight();
         }
         public House() : base()
         {
+        }
+
+        private int GetKeyPoint()
+        {
+
+            //------AGAST-------------
+            OpenCvSharp.AgastFeatureDetector agast = OpenCvSharp.AgastFeatureDetector.Create();
+            OpenCvSharp.KeyPoint[] points;
+
+            points = agast.Detect(this.ImgData);
+
+            for (int i = 0; i < points.Count(); i++)
+            {
+                keypoints.Add(new Point2f(points[i].Pt.X, points[i].Pt.Y));
+            }
+
+            agast.Dispose();
+
+            return keypoints.Count();
+        }
+
+        public void MakePolygon()
+        {
+            GetSides();
+
+            AddHeight();
+        }
+        private void AddHeight()
+        {
+            Random cRandom = new System.Random();
+            float dummyheight = cRandom.Next(10, 150); ;
+
+            int nPoly = this.build.CountPolygon3();
+            for (int l = 0; l < nPoly; l++)
+            {
+                int i1 = this.build.getPolygon3[l].i1;
+                int i2 = this.build.getPolygon3[l].i2;
+                int i3 = this.build.getPolygon3[l].i3;
+
+                int i4, i5, i6;
+
+                i4 = build.AddVertex3(new Vertex3(this.build.getVertex3[i1].x, dummyheight, this.build.getVertex3[i1].z));
+                i5 = build.AddVertex3(new Vertex3(this.build.getVertex3[i2].x, dummyheight, this.build.getVertex3[i2].z));
+                i6 = build.AddVertex3(new Vertex3(this.build.getVertex3[i3].x, dummyheight, this.build.getVertex3[i3].z));
+                build.AddPolygon3(new Polygon3(i6, i5, i4));
+            }
+
+            for (int i = 0; i < this.Count(); i++)
+            {
+                if (this.sides[i].Count() == 1)
+                {
+                    int i1, i2, i3;
+                    Point2f Item0;
+                    Point2f Item1;
+
+                    Item0 = this.sides[i].Item0;
+                    Item1 = this.sides[i].Item1;
+
+                    i1 = build.AddVertex3(new Vertex3(Item0.X + RelPt.X, 0, Item0.Y + RelPt.Y));
+                    i2 = build.AddVertex3(new Vertex3(Item0.X + RelPt.X, dummyheight, Item0.Y + RelPt.Y));
+                    i3 = build.AddVertex3(new Vertex3(Item1.X + RelPt.X, 0, Item1.Y + RelPt.Y));
+                    build.AddPolygon3(new Polygon3(i1, i2, i3));
+
+                    i1 = build.AddVertex3(new Vertex3(Item0.X + RelPt.X, dummyheight, Item0.Y + RelPt.Y));
+                    i2 = build.AddVertex3(new Vertex3(Item1.X + RelPt.X, dummyheight, Item1.Y + RelPt.Y));
+                    i3 = build.AddVertex3(new Vertex3(Item1.X + RelPt.X, 0, Item1.Y + RelPt.Y));
+                    build.AddPolygon3(new Polygon3(i1, i2, i3));
+                }
+            }
+
+
+        }
+
+        private int GetSides()
+        {
+            build.Release();
+
+            Subdiv2D subdiv = new Subdiv2D();
+
+            subdiv.InitDelaunay(new Rect(0, 0, (int)(Width) + 100, (int)(Height) + 100));
+            subdiv.Insert(this.dist_points);
+
+            // ドロネー三角形のリストを取得
+            Vec6f[] triangles;
+            triangles = subdiv.GetTriangleList();
+
+            //  辺を洗い出す
+            this.sides.Clear();
+
+            for (int l = 0; l < triangles.Count(); l++)
+            {
+
+                //(10, 20)-(100, 200)に、幅1の黒い線を引く
+                Vec6f ptData = triangles[l];
+
+                if ((0 <= ptData[0] && ptData[0] < (float)Width + 1)
+                    && (0 <= ptData[1] && ptData[1] < (float)Height + 1)
+                    && (0 <= ptData[2] && ptData[2] < (float)Width + 1)
+                    && (0 <= ptData[3] && ptData[3] < (float)Height + 1)
+                    && (0 <= ptData[4] && ptData[4] < (float)Width + 1)
+                    && (0 <= ptData[5] && ptData[5] < (float)Height + 1)
+                )
+                {
+                    if ( IsInArea(ptData) != false )
+                    {
+                        int i1, i2, i3;
+
+                        AddSide(ptData[0], ptData[1], ptData[2], ptData[3]);
+                        AddSide(ptData[2], ptData[3], ptData[4], ptData[5]);
+                        AddSide(ptData[4], ptData[5], ptData[0], ptData[1]);
+
+                        //  底辺として記憶する
+                        i1 = build.AddVertex3(new Vertex3(ptData[0] + RelPt.X, 0, ptData[1] + RelPt.Y));
+                        i2 = build.AddVertex3(new Vertex3(ptData[2] + RelPt.X, 0, ptData[3] + RelPt.Y));
+                        i3 = build.AddVertex3(new Vertex3(ptData[4] + RelPt.X, 0, ptData[5] + RelPt.Y));
+                        build.AddPolygon3(new Polygon3(i1, i2, i3));
+                    }
+                }
+            }
+
+            subdiv.Dispose();
+
+
+            return this.sides.Count();
+
+        }
+
+        private bool IsInSidePoint(float x, float y)
+        {
+            bool bInside = false;
+
+            for (int i = 0; i < this.keypoints.Count(); i++)
+            {
+                if (this.keypoints[i].X == (int)x && this.keypoints[i].Y == (int)y)
+                {
+                    return true;
+                }
+            }
+
+            if (x < 0 || y < 0 || x >= Width || y >= Height)
+            {
+                return false;
+            }
+
+            Vec3b px = ImgData.Get<Vec3b>((int)y, (int)x);
+
+            if (px != new Vec3b(0xFF, 0xFF, 0xFF))
+            {
+                bInside = true;
+            }
+
+            return bInside;
+        }
+
+        private Boolean IsInArea(float x, float y)
+        {
+            double angle = 0;
+
+            for (int i = 0; i < this.dist_points.Count(); i++)
+            {
+                Point2f pt1;
+                Point2f pt2;
+
+                pt1 = this.dist_points[i];
+                if (i + 1 >= this.dist_points.Count())
+                {
+                    pt2 = this.dist_points[0];
+                }
+                else
+                {
+                    pt2 = this.dist_points[i + 1];
+                }
+                Vec2d v1;
+                Vec2d v2;
+
+                v1.Item0 = pt1.X - x;
+                v1.Item1 = pt1.Y - y;
+                v2.Item0 = pt2.X - x;
+                v2.Item1 = pt2.Y - y;
+
+                double innerPro;
+                double crossPro;
+
+
+                innerPro = v1.Item0 * v2.Item0 + v1.Item1 * v2.Item1;
+                crossPro = v1.Item0 * v2.Item1 - v1.Item1 * v2.Item0;
+
+                double temp_angle;
+
+                temp_angle = (Math.Atan2(crossPro, innerPro) * 180) / Math.PI;
+
+                angle += temp_angle;
+
+            }
+
+            if (359 < Math.Abs(angle) && Math.Abs(angle) < 361)
+            {
+                return true;
+            }
+            else
+            {
+                return false;
+            }
+        }
+
+        private bool IsInArea(Vec6f ptData)
+        {
+            //なんか大変そうなので重心にあるかだけみる
+            float x = (float)((ptData[0] + ptData[2] + ptData[4]) / 3);
+            float y = (float)((ptData[1] + ptData[3] + ptData[5]) / 3);
+
+
+            return IsInArea(x, y);
+
+        }
+    }
+
+    public class Road : MapObject
+    {
+        public Road(Mat obj, float startX, float startY) : base(obj, startX, startY)
+        {
+        }
+        public Road() : base()
+        {
+        }
+
+        public void MakeRoadLine()
+        {
+            for( int i = 0; i < this.dist_points.Count(); i++)
+            {
+                build.AddVertex3(new Vertex3(dist_points[i].X + RelPt.X, 3, dist_points[i].Y + RelPt.Y));
+            }
         }
     }
 

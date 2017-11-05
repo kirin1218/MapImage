@@ -24,7 +24,9 @@ namespace MapImage
 
         Mat viewImage;
         List<House> listHouse;
+        List<Road> listRoad;
         Rect subviewRect;
+        int nListViewMode;
 
         private Rectangle drawRectangle;
         public Form1()
@@ -36,10 +38,16 @@ namespace MapImage
             listView1.GridLines = true;
 
             //カラムの設定（3列）
-            listView1.Columns.Add("色");
-            listView1.Columns.Add("数");
+            listView1.Columns.Add("No");
+            listView1.Columns.Add("個数");
+            listView1.Columns.Add("MinX");
+            listView1.Columns.Add("MinY");
+            listView1.Columns.Add("MaxX");
+            listView1.Columns.Add("MaxY");
 
             listHouse = new List<House>();
+            listRoad = new List<Road>();
+
             //ListViewコントロールの設定
             KeyPointslistView.View = View.Details;
             //KeyPointslistView.FullRowSelect = true;
@@ -139,27 +147,205 @@ namespace MapImage
         {
             ListView.SelectedListViewItemCollection breakfast = this.listView1.SelectedItems;
 
-            int color;
-            List<Vec3b> v = new List<Vec3b>();
+            int index;
 
             foreach (ListViewItem item in breakfast)
             {
                 string strTemp;
                 strTemp = item.SubItems[0].Text;
 
-                Vec3b hsv = new Vec3b();
-                color = Convert.ToInt32(strTemp, 16);
+                index = Convert.ToInt32(strTemp, 10);
 
-                hsv[0] = (byte)((color & 0xFF0000) >> 16);
-                hsv[1] = (byte)((color & 0x00FF00) >> 8);
-                hsv[2] = (byte)((color & 0x0000FF) >> 0);
+                //listHouse[index].MakePolygon();
 
-                v.Add(hsv);
-            }
+                KeyPointslistView.Items.Clear();
 
-            if (v.Count > 0)
-            {
-                filterImage(v);
+                if (nListViewMode == 1)
+                {
+                    for (int i = 0; i < listHouse[index].keypoints.Count(); i++)
+                    {
+                        string[] row = new string[2];
+
+                        row[0] = listHouse[index].keypoints[i].X.ToString();
+                        row[1] = listHouse[index].keypoints[i].Y.ToString();
+
+                        KeyPointslistView.Items.Add(new ListViewItem(row));
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < listRoad[index].keypoints.Count(); i++)
+                    {
+                        string[] row = new string[2];
+
+                        row[0] = listRoad[index].keypoints[i].X.ToString();
+                        row[1] = listRoad[index].keypoints[i].Y.ToString();
+
+                        KeyPointslistView.Items.Add(new ListViewItem(row));
+                    }
+                }
+
+
+                //描画先とするImageオブジェクトを作成する
+                Bitmap canvas = new Bitmap(pictureBox.Width, pictureBox.Height);
+                //ImageオブジェクトのGraphicsオブジェクトを作成する
+                Graphics g = Graphics.FromImage(canvas);
+
+                //直線で接続する点の配列を作成
+                Point2d[] ps;
+                System.Drawing.Point[] ps2;
+                if (nListViewMode == 1)
+                {
+                    ps = new Point2d[listHouse[index].keypoints.Count()];
+                    ps2 = new System.Drawing.Point[listHouse[index].keypoints.Count()];
+                }
+                else
+                {
+                    ps = new Point2d[listRoad[index].keypoints.Count()];
+                    ps2 = new System.Drawing.Point[listRoad[index].keypoints.Count()];
+
+                }
+
+                double minX = 10000;
+                double minY = 10000;
+                double maxX = 0;
+                double maxY = 0;
+                double xPer;
+                double yPer;
+                double width;
+                double height;
+
+                if (nListViewMode == 1)
+                {
+                    for (int i = 0; i < listHouse[index].keypoints.Count(); i++)
+                    {
+                        double x;
+                        double y;
+
+                        x = new GeoCoordinate(0, listHouse[index].BoxMin.X).GetDistanceTo(new GeoCoordinate(0, listHouse[index].keypoints[i].X));
+                        y = new GeoCoordinate(listHouse[index].BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(listHouse[index].keypoints[i].Y, 0));
+
+                        ps[i] = new Point2d(x, y);
+
+                        if (minX > ps[i].X)
+                        {
+                            minX = ps[i].X;
+                        }
+                        if (minY > ps[i].Y)
+                        {
+                            minY = ps[i].Y;
+                        }
+
+                        if (maxX < ps[i].X)
+                        {
+                            maxX = ps[i].X;
+                        }
+                        if (maxY < ps[i].Y)
+                        {
+                            maxY = ps[i].Y;
+                        }
+                    }
+
+                    width = maxX - minX;
+                    height = maxY - minY;
+
+                    xPer = (double)(pictureBox.Width - 100) / (double)width;
+                    yPer = (double)(pictureBox.Height - 100) / (double)height;
+
+                    for (int i = 0; i < listHouse[index].keypoints.Count(); i++)
+                    {
+                        ps2[i].X = (int)(((double)ps[i].X - minX) * Math.Min(xPer, yPer) + 50);
+                        ps2[i].Y = (int)(((double)ps[i].Y - minY) * Math.Min(xPer, yPer) + 50);
+                    }
+
+                    //多角形を描画する
+                    g.DrawPolygon(Pens.Black, ps2);
+                }
+                else
+                {
+                    for (int i = 0; i < listRoad[index].keypoints.Count(); i++)
+                    {
+                        double x;
+                        double y;
+
+                        x = new GeoCoordinate(0, listRoad[index].BoxMin.X).GetDistanceTo(new GeoCoordinate(0, listRoad[index].keypoints[i].X));
+                        y = new GeoCoordinate(listRoad[index].BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(listRoad[index].keypoints[i].Y, 0));
+
+                        ps[i] = new Point2d(x, y);
+
+                        if (minX > ps[i].X)
+                        {
+                            minX = ps[i].X;
+                        }
+                        if (minY > ps[i].Y)
+                        {
+                            minY = ps[i].Y;
+                        }
+
+                        if (maxX < ps[i].X)
+                        {
+                            maxX = ps[i].X;
+                        }
+                        if (maxY < ps[i].Y)
+                        {
+                            maxY = ps[i].Y;
+                        }
+                    }
+
+                    width = maxX - minX;
+                    height = maxY - minY;
+
+                    xPer = (double)(pictureBox.Width - 100) / (double)width;
+                    yPer = (double)(pictureBox.Height - 100) / (double)height;
+
+                    for (int i = 0; i < listRoad[index].keypoints.Count(); i++)
+                    {
+                        ps2[i].X = (int)(((double)ps[i].X - minX) * Math.Min(xPer, yPer) + 50);
+                        ps2[i].Y = (int)(((double)ps[i].Y - minY) * Math.Min(xPer, yPer) + 50);
+                    }
+
+                    for (int i = 0; i < listRoad[index].keypoints.Count()-1; i++)
+                    {
+                        g.DrawLine(Pens.Black, ps2[i].X, ps2[i].Y, ps2[i+1].X, ps2[i+1].Y);
+                    }
+                }
+
+
+
+                if (nListViewMode == 1)
+                {
+                    for (int i = 0; i < listHouse[index].sides.Count(); i++)
+                    {
+                        Side line = listHouse[index].sides[i];
+                        float x1 = (float)(((double)line.Item0.X - minX) * Math.Min(xPer, yPer) + 50);
+                        float y1 = (float)(((double)line.Item0.Y - minY) * Math.Min(xPer, yPer) + 50);
+                        float x2 = (float)(((double)line.Item1.X - minX) * Math.Min(xPer, yPer) + 50);
+                        float y2 = (float)(((double)line.Item1.Y - minY) * Math.Min(xPer, yPer) + 50);
+
+                        g.DrawLine(Pens.Red, (float)x1, (float)y1, (float)x2, (float)y2);
+                    }
+                }
+                else
+                {
+                    for (int i = 0; i < listRoad[index].sides.Count(); i++)
+                    {
+                        Side line = listRoad[index].sides[i];
+                        float x1 = (float)(((double)line.Item0.X - minX) * Math.Min(xPer, yPer) + 50);
+                        float y1 = (float)(((double)line.Item0.Y - minY) * Math.Min(xPer, yPer) + 50);
+                        float x2 = (float)(((double)line.Item1.X - minX) * Math.Min(xPer, yPer) + 50);
+                        float y2 = (float)(((double)line.Item1.Y - minY) * Math.Min(xPer, yPer) + 50);
+
+                        g.DrawLine(Pens.Red, (float)x1, (float)y1, (float)x2, (float)y2);
+                    }
+                }
+
+                //リソースを解放する
+                g.Dispose();
+
+                //PictureBox1に表示する
+                pictureBox.Image = canvas;
+
+                break;
             }
         }
 
@@ -503,34 +689,66 @@ namespace MapImage
 
         private void button1_Click(object sender, EventArgs e)
         {
-            MapInfoJson map = new MapInfoJson();
+            Dictionary<String,MapInfoJson> dic = new Dictionary<String, MapInfoJson>();
 
             for ( int i = 0;  i < listHouse.Count(); i++)
             {
                 House data = listHouse[i];
 
-                map.Add(data.build);
+                float minX = data.RelPt.X;
+                float minY = data.RelPt.Y;
+                if( minX < 0)
+                {
+                    minX -= 500;
+                }
+                else
+                {
+                    minX += 500;
+                }
+                if (minY < 0)
+                {
+                    minY -= 500;
+                }
+                else
+                {
+                    minY += 500;
+                }
+                int indexX = (int)(minX / 1000);
+                int indexY = (int)(minY / 1000);
+                string strIndex = indexX.ToString() + "x" + indexY.ToString();
+
+                if ( !(dic.ContainsKey(strIndex) )) {
+                    dic.Add(strIndex, new MapInfoJson() );
+                }
+
+                dic[strIndex].Add(data.build);
             }
 
-            using (var ms = new MemoryStream())
-            using (var sr = new StreamReader(ms))
+            foreach (var key in dic.Keys)
             {
-                var serializer = new DataContractJsonSerializer(typeof(MapInfoJson));
-                serializer.WriteObject(ms, map);
-                ms.Position = 0;
+                using (var ms = new MemoryStream())
+                using (var sr = new StreamReader(ms))
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(MapInfoJson));
+                    serializer.WriteObject(ms, dic[key]);
+                    ms.Position = 0;
 
-                var json = sr.ReadToEnd();
-                //notepad C:/FastSource/UnityProjects/JsonToMesh/Assets/mapinfo.json
-                System.IO.File.WriteAllText(@"C:/FastSource/UnityProjects/JsonToMesh/Assets/mapinfo.json", json);
-                //WriteLine($"{json}"); // {"Age":31,"Name":"Kato Jun"}
+                    var json = sr.ReadToEnd();
+
+                    string strFName = "mapinfo_" + key + ".json";
+                    string strPath = @"C:/FastSource/UnityProjects/Dive_Type1/Assets/Json/" + strFName;
+                    System.IO.File.WriteAllText(strPath, json);
+                }
             }
+
+
         }
 
         private void button2_Click(object sender, EventArgs e)
         {
             //shp.Shpfile shpfile = new shp.Shpfile(@"C:\FastSource\AnalyzeShp\Data\SampleShp\japan_ver81.shp");
-            //shp.Shpfile shpfile = new shp.Shpfile(@"C:\Users\Kirin\Downloads\planet_139.441,35.572_139.998,35.853-shp\shape\buildings.shp");
-            shp.Shpfile shpfile = new shp.Shpfile(@"D:\Source\MapImage\Data\SampleShp\japan_ver81.shp");
+            shp.Shpfile shpfile = new shp.Shpfile(@"C:\Users\Kirin\Downloads\planet_139.441,35.572_139.998,35.853-shp\shape\buildings.shp");
+            //shp.Shpfile shpfile = new shp.Shpfile(@"D:\Source\MapImage\Data\SampleShp\japan_ver81.shp");
 
             
 
@@ -554,38 +772,200 @@ namespace MapImage
 
                     House obj = new House();
 
+                    obj.SetRect(
+                        shpfile.Contents.listContents[i].Box[0],
+                        shpfile.Contents.listContents[i].Box[1],
+                        shpfile.Contents.listContents[i].Box[2],
+                        shpfile.Contents.listContents[i].Box[3]
+                        );
+
                     for ( int k = start; k <= end; k++)
                     {
 
                         shp.Point pt;
                         pt = shpfile.Contents.listContents[i].listPoints[k];
 
-                        obj.SetRect(
-                            shpfile.Contents.listContents[i].Box[0],
-                            shpfile.Contents.listContents[i].Box[1],
-                            shpfile.Contents.listContents[i].Box[2],
-                            shpfile.Contents.listContents[i].Box[3]
-                            );
+                        //var x = new GeoCoordinate(0, obj.BoxMin.X).GetDistanceTo(new GeoCoordinate(0, pt.x));
+                        //var y = new GeoCoordinate(obj.BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(pt.y, 0));
 
-                        var x = new GeoCoordinate(0, obj.BoxMin.X).GetDistanceTo(new GeoCoordinate(0, pt.x));
-                        var y = new GeoCoordinate(obj.BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(pt.y, 0));
-
-                        obj.AddKeyPoint(x, y);
+                        obj.AddKeyPoint(pt.x, pt.y);
                     }
 
-                    obj.CalcSize();
+                    if (obj.keypoints.Count() > 2)
+                    {
+                        obj.Long2Dist();
 
-                    obj.MakePolygon();
+                        obj.CalcSize();
 
-                    listHouse.Add(obj);
+                        obj.MakePolygon();
 
-                    break;
-
+                        listHouse.Add(obj);
+                    }
                 }
-
-                break;
             }
 
+            listView1.Items.Clear();
+            nListViewMode = 1;
+            //foreach (var v in listHouse)
+            for ( int i = 0; i < listHouse.Count(); i++ )
+            {
+                string[] row = new string[6];
+
+                row[0] = i.ToString();
+                row[1] = listHouse[i].keypoints.Count().ToString();
+                row[2] = listHouse[i].BoxMin.X.ToString();
+                row[3] = listHouse[i].BoxMin.Y.ToString();
+                row[4] = listHouse[i].BoxMax.X.ToString();
+                row[5] = listHouse[i].BoxMax.Y.ToString();
+
+                listView1.Items.Add(new ListViewItem(row));
+
+                if( i > 3000)
+                {
+                    break;
+                }
+            }
+
+        }
+
+        private void button2_Click_1(object sender, EventArgs e)
+        {
+            //shp.Shpfile shpfile = new shp.Shpfile(@"C:\FastSource\AnalyzeShp\Data\SampleShp\japan_ver81.shp");
+            shp.Shpfile shpfile = new shp.Shpfile(@"C:\Users\Kirin\Downloads\planet_139.441,35.572_139.998,35.853-shp\shape\roads.shp");
+            //shp.Shpfile shpfile = new shp.Shpfile(@"D:\Source\MapImage\Data\SampleShp\japan_ver81.shp");
+
+
+
+            for (int i = 0; i < shpfile.ContentPolyline.listContents.Count(); i++)
+            {
+                for (int j = 0; j < shpfile.ContentPolyline.listContents[i].listParts.Count(); j++)
+                {
+                    int start;
+                    int end;
+
+                    start = shpfile.ContentPolyline.listContents[i].listParts[j];
+                    if (j + 1 == shpfile.ContentPolyline.listContents[i].listParts.Count())
+                    {
+                        end = shpfile.ContentPolyline.listContents[i].listPoints.Count() - 1;
+                    }
+                    else
+                    {
+                        end = shpfile.ContentPolyline.listContents[i].listParts[j + 1] - 1;
+                    }
+                    //  仕様上end　はstartと同じ座標になるのでendを一個前にずらす
+                    end--;
+
+                    Road obj = new Road();
+
+                    obj.SetRect(
+                        shpfile.ContentPolyline.listContents[i].Box[0],
+                        shpfile.ContentPolyline.listContents[i].Box[1],
+                        shpfile.ContentPolyline.listContents[i].Box[2],
+                        shpfile.ContentPolyline.listContents[i].Box[3]
+                        );
+
+                    for (int k = start; k <= end; k++)
+                    {
+
+                        shp.Point pt;
+                        pt = shpfile.ContentPolyline.listContents[i].listPoints[k];
+
+                        //var x = new GeoCoordinate(0, obj.BoxMin.X).GetDistanceTo(new GeoCoordinate(0, pt.x));
+                        //var y = new GeoCoordinate(obj.BoxMin.Y, 0).GetDistanceTo(new GeoCoordinate(pt.y, 0));
+
+                        obj.AddKeyPoint(pt.x, pt.y);
+                    }
+
+                    if (obj.keypoints.Count() > 1)
+                    {
+                        obj.Long2Dist();
+
+                        obj.CalcSize();
+
+                        obj.MakeRoadLine();
+
+                        listRoad.Add(obj);
+                    }
+                }
+            }
+
+            listView1.Items.Clear();
+            nListViewMode = 2;
+            //foreach (var v in listHouse)
+            for (int i = 0; i < listRoad.Count(); i++)
+            {
+                string[] row = new string[6];
+
+                row[0] = i.ToString();
+                row[1] = listRoad[i].keypoints.Count().ToString();
+                row[2] = listRoad[i].BoxMin.X.ToString();
+                row[3] = listRoad[i].BoxMin.Y.ToString();
+                row[4] = listRoad[i].BoxMax.X.ToString();
+                row[5] = listRoad[i].BoxMax.Y.ToString();
+
+                listView1.Items.Add(new ListViewItem(row));
+
+                if (i > 3000)
+                {
+                    break;
+                }
+            }
+        }
+
+        private void button3_Click(object sender, EventArgs e)
+        {
+            Dictionary<String, MapInfoJson> dic = new Dictionary<String, MapInfoJson>();
+
+            for (int i = 0; i < listRoad.Count(); i++)
+            {
+                Road data = listRoad[i];
+
+                float minX = data.RelPt.X;
+                float minY = data.RelPt.Y;
+                if (minX < 0)
+                {
+                    minX -= 500;
+                }
+                else
+                {
+                    minX += 500;
+                }
+                if (minY < 0)
+                {
+                    minY -= 500;
+                }
+                else
+                {
+                    minY += 500;
+                }
+                int indexX = (int)(minX / 1000);
+                int indexY = (int)(minY / 1000);
+                string strIndex = indexX.ToString() + "x" + indexY.ToString();
+
+                if (!(dic.ContainsKey(strIndex)))
+                {
+                    dic.Add(strIndex, new MapInfoJson());
+                }
+
+                dic[strIndex].Add(data.build);
+            }
+
+            foreach (var key in dic.Keys)
+            {
+                using (var ms = new MemoryStream())
+                using (var sr = new StreamReader(ms))
+                {
+                    var serializer = new DataContractJsonSerializer(typeof(MapInfoJson));
+                    serializer.WriteObject(ms, dic[key]);
+                    ms.Position = 0;
+
+                    var json = sr.ReadToEnd();
+
+                    string strFName = "roadinfo_" + key + ".json";
+                    string strPath = @"C:/FastSource/UnityProjects/Dive_Type1/Assets/Json/" + strFName;
+                    System.IO.File.WriteAllText(strPath, json);
+                }
+            }
         }
     }
 }
